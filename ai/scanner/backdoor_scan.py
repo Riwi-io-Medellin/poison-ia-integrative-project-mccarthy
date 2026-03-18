@@ -55,23 +55,33 @@ class BackdoorScan(BaseScan):
 
         # --- Signal 2: loss-trajectory outliers ---
         if train_losses:
-            # Average loss per sample across batches (rough approximation)
-            all_losses = np.array(train_losses)          # (steps, batch)
-            mean_loss  = np.mean(all_losses, axis=0)     # per-position avg
-            # Samples with anomalously LOW loss learned a "shortcut"
-            threshold = np.percentile(mean_loss, 5)
-            fast_learners = np.where(mean_loss < threshold)[0].tolist()
+            # Average loss per sample across batches (rough approximation).
+            # Training batches can be uneven (last batch smaller), so we can't
+            # directly convert to a rectangular numpy array.
+            max_batch_len = max(len(batch) for batch in train_losses)
+            per_position_losses = []
+            for pos in range(max_batch_len):
+                # Collect the loss for this position in each batch (if present).
+                vals = [batch[pos] for batch in train_losses if pos < len(batch)]
+                if vals:
+                    per_position_losses.append(np.mean(vals))
 
-            if fast_learners:
-                findings.append(ScanFinding(
-                    scan_name=self.name,
-                    severity="medium",
-                    description=(
-                        f"{len(fast_learners)} samples converged unusually "
-                        f"fast — potential shortcut/trigger learning."
-                    ),
-                    affected_indices=fast_learners,
-                    confidence=0.60,
-                ))
+            if per_position_losses:
+                mean_loss = np.array(per_position_losses)
+                # Samples with anomalously LOW loss learned a "shortcut"
+                threshold = np.percentile(mean_loss, 5)
+                fast_learners = np.where(mean_loss < threshold)[0].tolist()
+
+                if fast_learners:
+                    findings.append(ScanFinding(
+                        scan_name=self.name,
+                        severity="medium",
+                        description=(
+                            f"{len(fast_learners)} samples converged unusually "
+                            f"fast — potential shortcut/trigger learning."
+                        ),
+                        affected_indices=fast_learners,
+                        confidence=0.60,
+                    ))
 
         return findings

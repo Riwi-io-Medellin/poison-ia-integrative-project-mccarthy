@@ -15,8 +15,20 @@ class IntegrityScan(BaseScan):
         if not train_losses:
             return findings
 
-        all_losses = np.array(train_losses)
-        mean_loss  = np.mean(all_losses, axis=0)
+        # Training batches can be uneven (last batch smaller), so the loss
+        # history is a ragged list of lists. Compute mean loss per batch position
+        # (approx. per-sample when batch ordering is stable).
+        max_batch_len = max(len(batch) for batch in train_losses)
+        per_position_losses = []
+        for pos in range(max_batch_len):
+            vals = [batch[pos] for batch in train_losses if pos < len(batch)]
+            if vals:
+                per_position_losses.append(np.mean(vals))
+
+        if not per_position_losses:
+            return findings
+
+        mean_loss = np.array(per_position_losses)
 
         # High-loss outliers → likely mislabeled
         threshold = np.percentile(mean_loss, 100 - (cfg.anomaly_threshold * 100))

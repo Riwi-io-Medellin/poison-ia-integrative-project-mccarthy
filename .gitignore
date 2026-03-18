@@ -11,3 +11,5 @@
 #python
 **/__pycache__/
 **/sandbox_model/
+**/poison_ai_output/
+**/.venv/
